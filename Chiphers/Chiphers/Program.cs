@@ -1,13 +1,17 @@
 ﻿
+using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Engines;
+using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
+using Org.BouncyCastle.Security;
 using System.Security.Cryptography;
 using System.Text;
-class Program 
+class Program
 {
     public static void Main(string[] args)
     {
+        RsaBouncyCastle();
         RSA();
         BlowFish();
         AES();
@@ -29,7 +33,7 @@ class Program
 
         Console.WriteLine($"Open text: {text}");
         Console.Write("Key: ");
-        foreach(var bt in aes.Key) Console.Write($"{bt.ToString()} ");
+        foreach (var bt in aes.Key) Console.Write($"{bt.ToString()} ");
         Console.WriteLine();
         Console.Write("IV(initialization vector): ");
         foreach (var bt in aes.IV) Console.Write($"{bt.ToString()} ");
@@ -69,7 +73,7 @@ class Program
         engine.Init(false, keyParam);
         // Блоками дешифруем
         i = 0;
-        while(i < encryptedBuffer.Length)
+        while (i < encryptedBuffer.Length)
         {
             i += engine.ProcessBlock(encryptedBuffer, i, decryptedBuffer, i);
         }
@@ -101,14 +105,43 @@ class Program
             // но у нас асиметричное
             rsaProvider_Attacker.FromXmlString(publicKey);
             var sender_decrypt_data = rsaProvider_Attacker.Decrypt(sendData, false);
-        }catch(CryptographicException ex)
+        }
+        catch (CryptographicException ex)
         {
             Console.WriteLine(ex.Message);
         }
         // Получатель расшифровывает данные своим публичным ключом
         var receiveData = rsaProvider_Receiver.Decrypt(sendData, false);
         var receivedText = Encoding.UTF8.GetString(receiveData);
+    }
 
+    public static void RsaBouncyCastle()
+    {
+        var text = "Привет, я читаю канал VT_InfoSecurity";
+        // получаем массив байт для шифрования
+        var openText = Encoding.UTF8.GetBytes(text);
+        // создаём шифр RSA
+        RsaEngine rsaEngine = new RsaEngine();
+        // создаём защищённый генератор случайных чисел
+        var random = new SecureRandom();
+        // создаём генератор пар - открытый ключ - закрытый ключ
+        // при этом указываем, что числа для генерации будут идти из защищённого генератора
+        // длинна ключа будет составлять 128 байт(1024 бита)
+        var generationParam = new KeyGenerationParameters(random, 1024);
+        var rsaKeyGenerator = new RsaKeyPairGenerator();
+        rsaKeyGenerator.Init(generationParam);
+        // получаем пару открытый-закрытый ключ
+        var result = rsaKeyGenerator.GenerateKeyPair();
+        // задаём режим шифрования - указываем открытый ключ (зашифровываем данные)
+        rsaEngine.Init(true, result.Public);
+        // для текущего режима получаем шифртекст
+        var encryptedData = rsaEngine.ProcessBlock(openText, 0, openText.Length);
+        // задаём режим шифрования - указываем закрытый ключ (расшифровываем данные)
+        rsaEngine.Init(false, result.Private);
+        // получаем открытый текст
+        var decryptedData = rsaEngine.ProcessBlock(encryptedData, 0, encryptedData.Length);
+        // получаем исходную строку
+        var decryptedText = Encoding.UTF8.GetString(decryptedData);
     }
 
 }
